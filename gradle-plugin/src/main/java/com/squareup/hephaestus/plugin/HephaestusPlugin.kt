@@ -115,24 +115,22 @@ open class HephaestusPlugin : Plugin<Project> {
     // compile task. If the plugin classpath changed, then DisableIncrementalCompilationTask sets
     // the signal to false.
     @Suppress("UnstableApiUsage")
-    val incrementalSignal = project.gradle.sharedServices
-        .registerIfAbsent("incrementalSignal", IncrementalSignal::class.java) { }
+    registerIncrementalSignalBuildService(project)
 
     if (isAndroidProject) {
       project.androidVariantsConfigure { variant ->
         val compileTaskName = "compile${variant.name.capitalize(US)}Kotlin"
-        disableIncrementalCompilationAction(project, incrementalSignal, compileTaskName)
+        disableIncrementalCompilationAction(project, compileTaskName)
       }
     } else {
       // The Java plugin has two Kotlin tasks we care about: compileKotlin and compileTestKotlin.
-      disableIncrementalCompilationAction(project, incrementalSignal, "compileKotlin")
-      disableIncrementalCompilationAction(project, incrementalSignal, "compileTestKotlin")
+      disableIncrementalCompilationAction(project, "compileKotlin")
+      disableIncrementalCompilationAction(project, "compileTestKotlin")
     }
   }
 
   fun disableIncrementalCompilationAction(
     project: Project,
-    incrementalSignal: Provider<IncrementalSignal>,
     compileTaskName: String
   ) {
     // Disable incremental compilation, if the compiler plugin dependency isn't up-to-date.
@@ -146,7 +144,6 @@ open class HephaestusPlugin : Plugin<Project> {
       task.pluginClasspath.from(
           project.configurations.getByName(PLUGIN_CLASSPATH_CONFIGURATION_NAME)
       )
-      task.incrementalSignal.set(incrementalSignal)
     }
 
     project.tasks.named(compileTaskName, KotlinCompile::class.java) { compileTask ->
@@ -164,7 +161,7 @@ open class HephaestusPlugin : Plugin<Project> {
       compileTask.doFirst {
         // If the signal is set, then the plugin classpath changed. Apply the setting that
         // DisableIncrementalCompilationTask requested.
-        val incremental = incrementalSignal.get().incremental[projectPath]
+        val incremental = getIncrementalSignal(projectPath)
         if (incremental != null) {
           compileTask.incremental = incremental
         }
